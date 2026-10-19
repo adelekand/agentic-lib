@@ -1,4 +1,4 @@
-package com.adelekand.dto;
+package com.adelekand.messages;
 
 public sealed interface StreamChunk {
     record Text(String text) implements StreamChunk {}

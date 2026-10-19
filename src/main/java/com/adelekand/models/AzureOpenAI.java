@@ -1,11 +1,12 @@
 package com.adelekand.models;
 
-import com.adelekand.dto.Message;
-import com.adelekand.exceptions.ModelException;
-import com.adelekand.dto.ModelResponse;
+import com.adelekand.messages.Message;
+import com.adelekand.messages.StreamChunk;
+import com.adelekand.messages.ModelResponse;
+import com.adelekand.messages.Json;
 import com.adelekand.tools.ToolCall;
 import com.adelekand.tools.ToolSpec;
-import com.adelekand.dto.Usage;
+import com.adelekand.messages.Usage;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -18,7 +19,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public final class AzureOpenAI implements Model {
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -95,6 +100,56 @@ public final class AzureOpenAI implements Model {
         }
     }
 
+    @Override
+    public void chatStream(List<Message> messages, List<ToolSpec> tools, Consumer<StreamChunk> onChunk) {
+        ObjectNode body = buildBody(messages, tools);
+        body.put("stream", true);
+        body.putObject("stream_options").put("include_usage", true);
+
+        try {
+            HttpResponse<Stream<String>> resp = http.send(request(body), HttpResponse.BodyHandlers.ofLines());
+            try (Stream<String> lines = resp.body()) {
+                if (resp.statusCode() / 100 != 2) {
+                    throw new ModelException(resp.statusCode() + ": " + lines.collect(Collectors.joining("\n")));
+                }
+                Iterator<String> it = lines.iterator();
+                while (it.hasNext()) {
+                    String line = it.next().trim();
+                    if (!line.startsWith("data:")) continue;
+                    String data = line.substring(5).trim();
+                    if (data.equals("[DONE]")) break;
+
+                    JsonNode v = Json.parse(data);
+
+                    JsonNode u = v.path("usage");
+                    if (u.isObject()) {
+                        onChunk.accept(new StreamChunk.UsageChunk(
+                                new Usage(u.path("prompt_tokens").asInt(), u.path("completion_tokens").asInt())));
+                    }
+
+                    JsonNode delta = v.path("choices").path(0).path("delta");
+                    JsonNode content = delta.path("content");
+                    if (content.isString() && !content.asString().isEmpty()) {
+                        onChunk.accept(new StreamChunk.Text(content.asString()));
+                    }
+                    for (JsonNode c : delta.path("tool_calls")) {
+                        JsonNode fn = c.path("function");
+                        onChunk.accept(new StreamChunk.ToolCallDelta(
+                                c.path("index").asInt(),
+                                c.path("id").isString() ? c.path("id").asString() : null,
+                                fn.path("name").isString() ? fn.path("name").asString() : null,
+                                fn.path("arguments").asString("")));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new ModelException("stream failed: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ModelException("interrupted", e);
+        }
+    }
+
     private static ObjectNode toWire(Message m) {
         ObjectNode n = JSON.createObjectNode();
         return switch (m) {
@@ -125,5 +180,25 @@ public final class AzureOpenAI implements Model {
                 .put("description", t.description())
                 .set("parameters", t.parameters());
         return n;
+    }
+
+    private ObjectNode buildBody(List<Message> messages, List<ToolSpec> tools) {
+        ObjectNode body = Json.object();
+        ArrayNode msgs = body.putArray("messages");
+        messages.forEach(m -> msgs.add(toWire(m)));
+        if (!tools.isEmpty()) {
+            ArrayNode t = body.putArray("tools");
+            tools.forEach(s -> t.add(toolToWire(s)));
+        }
+        return body;
+    }
+
+    private HttpRequest request(ObjectNode body) {
+        return HttpRequest.newBuilder(URI.create(url()))
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofMinutes(2))
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                .build();
     }
 }

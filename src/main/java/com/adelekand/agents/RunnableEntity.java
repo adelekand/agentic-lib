@@ -1,7 +1,7 @@
-package com.adelekand;
+package com.adelekand.agents;
 
-import com.adelekand.dto.RunInput;
-import com.adelekand.dto.RunOutput;
+import com.adelekand.messages.RunInput;
+import com.adelekand.messages.RunOutput;
 
 public interface RunnableEntity {
     String name();

@@ -1,5 +1,6 @@
-package com.adelekand.dto;
+package com.adelekand.agents;
 
+import com.adelekand.messages.RunOutput;
 import tools.jackson.databind.JsonNode;
 
 public sealed interface AgentEvent {

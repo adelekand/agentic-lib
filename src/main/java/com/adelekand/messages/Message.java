@@ -1,5 +1,6 @@
-package com.adelekand;
+package com.adelekand.messages;
 
+import com.adelekand.tools.ToolCall;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 

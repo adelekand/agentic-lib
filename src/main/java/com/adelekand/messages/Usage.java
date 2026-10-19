@@ -1,4 +1,4 @@
-package com.adelekand.dto;
+package com.adelekand.messages;
 
 public record Usage(int inputTokens, int outputTokens) {
     public static final Usage ZERO = new Usage(0, 0);

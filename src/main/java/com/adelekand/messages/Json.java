@@ -1,4 +1,4 @@
-package com.adelekand.helpers;
+package com.adelekand.messages;
 
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;

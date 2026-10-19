@@ -1,4 +1,4 @@
-package com.adelekand.exceptions;
+package com.adelekand.agents;
 
 public class AgentException extends RuntimeException {
     public AgentException(String msg) {

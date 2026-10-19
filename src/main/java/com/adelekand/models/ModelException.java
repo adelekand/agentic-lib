@@ -1,4 +1,4 @@
-package com.adelekand.exceptions;
+package com.adelekand.models;
 
 public class ModelException extends RuntimeException {
     public ModelException(String msg) { super(msg); }

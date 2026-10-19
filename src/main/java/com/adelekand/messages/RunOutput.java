@@ -1,4 +1,4 @@
-package com.adelekand.dto;
+package com.adelekand.messages;
 
 import java.util.List;
 
